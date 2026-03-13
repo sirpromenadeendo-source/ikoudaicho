@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>遺構台帳管理</title>
+<style>
+:root {
+  --bg:#f6f7fb; --panel:#fff; --line:#d8deea; --text:#1c2430; --muted:#617083;
+  --accent:#3559d6; --accent-soft:#eaf0ff; --danger:#c03744; --ok:#1d8f5f;
+  --shadow:0 10px 30px rgba(17,24,39,.08);
+  --radius:16px;
+}
+* { box-sizing:border-box; }
+body { margin:0; font-family:"Yu Gothic UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif; background:var(--bg); color:var(--text); }
+header {
+  position:sticky; top:0; z-index:10; background:rgba(246,247,251,.95); backdrop-filter: blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.wrap { max-width:1500px; margin:0 auto; padding:16px; }
+h1 { margin:0; font-size:24px; }
+.sub { color:var(--muted); font-size:13px; margin-top:6px; }
+.toolbar, .toolbar2 {
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+}
+.toolbar { margin-top:14px; }
+.panel {
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);
+}
+button, .btn, select, input, textarea {
+  font:inherit;
+}
+button, .btn {
+  border:1px solid var(--line); background:#fff; color:var(--text); padding:10px 14px; border-radius:12px; cursor:pointer;
+}
+button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+button.soft { background:var(--accent-soft); color:var(--accent); border-color:#cfd9ff; }
+button.danger { background:#fff1f2; color:var(--danger); border-color:#ffd1d5; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.tabs { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0 12px; }
+.tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.layout {
+  display:grid; grid-template-columns: minmax(0, 1.8fr) minmax(340px, .95fr); gap:16px; align-items:start;
+}
+@media (max-width: 1100px) {
+  .layout { grid-template-columns:1fr; }
+}
+.table-wrap { overflow:auto; max-height:70vh; border-radius:var(--radius); }
+table { width:100%; border-collapse:separate; border-spacing:0; min-width:1180px; }
+thead th {
+  position:sticky; top:0; z-index:2; background:#f3f5fa; color:#334155; font-size:13px;
+  border-bottom:1px solid var(--line); padding:10px 8px; text-align:left; white-space:nowrap;
+}
+tbody td {
+  border-bottom:1px solid #edf1f6; padding:8px; vertical-align:top; font-size:13px;
+}
+tbody tr:hover { background:#fafcff; }
+tbody tr.selected { background:#eef3ff; }
+td.idcol { font-weight:700; width:70px; }
+td.compact, th.compact { width:74px; text-align:center; }
+td.memo { min-width:180px; white-space:pre-wrap; }
+.badge {
+  display:inline-flex; align-items:center; justify-content:center; min-width:28px; padding:4px 8px;
+  border-radius:999px; font-size:12px; font-weight:700; border:1px solid #cfe9dc; background:#effaf3; color:var(--ok);
+}
+.badge.off { border-color:#e6e9ef; background:#f6f7fa; color:#8a95a5; }
+.side { padding:16px; position:sticky; top:108px; }
+.grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px 12px;
+}
+.grid .full { grid-column:1 / -1; }
+.field label {
+  display:block; margin:0 0 6px; font-size:12px; color:#445166; font-weight:700;
+}
+.field input[type="text"], .field input[type="search"], .field input[type="number"], .field select, .field textarea {
+  width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:#fff;
+}
+.field textarea { min-height:84px; resize:vertical; }
+.check {
+  display:flex; align-items:center; gap:8px; min-height:42px; border:1px solid var(--line); border-radius:12px; padding:0 12px; background:#fff;
+}
+.muted { color:var(--muted); font-size:12px; }
+.count {
+  padding:8px 12px; background:#fff; border:1px solid var(--line); border-radius:12px; font-size:13px;
+}
+.search {
+  min-width:260px; flex:1 1 280px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:#fff;
+}
+.footer-actions {
+  display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;
+}
+.small { font-size:12px; }
+hr.sep { border:none; border-top:1px solid var(--line); margin:14px 0; }
+.notice { padding:12px 14px; background:#f9fbff; border:1px solid #dce7ff; color:#3559d6; border-radius:12px; font-size:13px; }
+.statusline { display:flex; justify-content:space-between; gap:12px; align-items:center; margin:10px 0 0; }
+.hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>遺構台帳管理</h1>
+    <div class="sub">住居・井戸・溝・土坑・ピットを一つのHTMLで管理できます。保存先はブラウザ内（localStorage）です。</div>
+    <div class="toolbar">
+      <div class="count" id="recordCount">0件</div>
+      <input id="searchInput" class="search" type="search" placeholder="検索（遺構番号・位置・性格・形状等・出土遺物・備考など）">
+      <button class="primary" id="addBtn">新規追加</button>
+      <button id="dupBtn">複製</button>
+      <button class="danger" id="delBtn">削除</button>
+      <button class="soft" id="exportJsonBtn">JSON書き出し</button>
+      <button id="importJsonBtn">JSON読み込み</button>
+      <button id="exportCsvBtn">CSV書き出し</button>
+      <button id="clearSearchBtn">検索クリア</button>
+      <input id="jsonFileInput" type="file" accept=".json" class="hidden">
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="layout">
+    <section class="panel">
+      <div class="wrap" style="padding:0;">
+        <div class="table-wrap">
+          <table id="dataTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel side">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <h2 id="formTitle" style="margin:0;font-size:20px;">編集</h2>
+        <div class="small muted" id="saveState">未保存の変更はありません</div>
+      </div>
+      <div class="notice" style="margin:12px 0;">
+        土層HTMLと同じく、インストール不要の単独HTMLです。ブラウザで開けば使えます。
+      </div>
+      <div id="formArea"></div>
+      <hr class="sep">
+      <div class="footer-actions">
+        <button class="primary" id="saveBtn">保存</button>
+        <button id="resetBtn">入力リセット</button>
+        <button id="newFromFormBtn">別レコードとして保存</button>
+      </div>
+      <div class="statusline">
+        <div class="small muted" id="selectedInfo">未選択</div>
+        <div class="small muted" id="lastSaved"></div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+const SCHEMA = {
+  "住居": {
+    "prefix": "SI",
+    "title": "住居（SI）",
+    "fields": [
+      [
+        "遺構番号",
+        "text"
+      ],
+      [
+        "断面",
+        "bool"
+      ],
+      [
+        "3D",
+        "bool"
+      ],
+      [
+        "土注",
+        "bool"
+      ],
+      [
+        "完掘",
+        "bool"
+      ],
+      [
+        "SP観測",
+        "bool"
+      ],
+      [
+        "位置",
+        "text"
+      ],
+      [
+        "検出面",
+        "text"
+      ],
+      [
+        "着手",
+        "bool"
+      ],
+      [
+        "性格",
+        "text"
+      ],
+      [
+        "形状等",
+        "textarea"
+      ],
+      [
+        "出土遺物",
+        "textarea"
+      ],
+      [
+        "年代(構築・廃絶)",
+        "text"
+      ],
+      [
+        "土層",
+        "textarea"
+      ],
+      [
+        "重複",
+        "text"
+      ],
+      [
+        "備考",
+        "textarea"
+      ],
+      [
+        "規模",
+        "text"
+      ],
+      [
+        "主軸方位",
+        "text"
+      ],
+      [
+        "標高",
+        "text"
+      ]
+    ]
+  },
+  "井戸": {
+    "prefix": "SE",
+    "title": "井戸（SE）",
+    "fields": [
+      [
+        "遺構番号",
+        "text"
+      ],
+      [
+        "断面",
+        "bool"
+      ],
+      [
+        "3D",
+        "bool"
+      ],
+      [
+        "土注",
+        "bool"
+      ],
+      [
+        "完掘",
+        "bool"
+      ],
+      [
+        "SP観測",
+        "bool"
+      ],
+      [
+        "位置",
+        "text"
+      ],
+      [
+        "検出面",
+        "text"
+      ],
+      [
+        "着手",
+        "bool"
+      ],
+      [
+        "性格",
+        "text"
+      ],
+      [
+        "形状等",
+        "textarea"
+      ],
+      [
+        "出土遺物",
+        "textarea"
+      ],
+      [
+        "年代(構築・廃絶)",
+        "text"
+      ],
+      [
+        "土層",
+        "textarea"
+      ],
+      [
+        "重複",
+        "text"
+      ],
+      [
+        "備考",
+        "textarea"
+      ],
+      [
+        "規模",
+        "text"
+      ],
+      [
+        "主軸方位",
+        "text"
+      ],
+      [
+        "標高",
+        "text"
+      ]
+    ]
+  },
+  "溝": {
+    "prefix": "SD",
+    "title": "溝（SD）",
+    "fields": [
+      [
+        "遺構番号",
+        "text"
+      ],
+      [
+        "断面",
+        "bool"
+      ],
+      [
+        "3D",
+        "bool"
+      ],
+      [
+        "土注",
+        "bool"
+      ],
+      [
+        "完掘",
+        "bool"
+      ],
+      [
+        "SP観測",
+        "bool"
+      ],
+      [
+        "位置",
+        "text"
+      ],
+      [
+        "検出面",
+        "text"
+      ],
+      [
+        "着手",
+        "bool"
+      ],
+      [
+        "性格",
+        "text"
+      ],
+      [
+        "形状等",
+        "textarea"
+      ],
+      [
+        "出土遺物",
+        "textarea"
+      ],
+      [
+        "年代(構築・廃絶)",
+        "text"
+      ],
+      [
+        "土層",
+        "textarea"
+      ],
+      [
+        "重複",
+        "text"
+      ],
+      [
+        "備考",
+        "textarea"
+      ],
+      [
+        "規模",
+        "text"
+      ],
+      [
+        "主軸方位",
+        "text"
+      ],
+      [
+        "標高",
+        "text"
+      ]
+    ]
+  },
+  "土坑": {
+    "prefix": "SK",
+    "title": "土坑（SK）",
+    "fields": [
+      [
+        "遺構番号",
+        "text"
+      ],
+      [
+        "断面",
+        "bool"
+      ],
+      [
+        "3D",
+        "bool"
+      ],
+      [
+        "土注",
+        "bool"
+      ],
+      [
+        "完掘",
+        "bool"
+      ],
+      [
+        "SP観測",
+        "bool"
+      ],
+      [
+        "位置",
+        "text"
+      ],
+      [
+        "検出面",
+        "text"
+      ],
+      [
+        "着手",
+        "bool"
+      ],
+      [
+        "性格",
+        "text"
+      ],
+      [
+        "形状等",
+        "textarea"
+      ],
+      [
+        "出土遺物",
+        "textarea"
+      ],
+      [
+        "年代(構築・廃絶)",
+        "text"
+      ],
+      [
+        "土層",
+        "textarea"
+      ],
+      [
+        "重複",
+        "text"
+      ],
+      [
+        "備考",
+        "textarea"
+      ],
+      [
+        "規模",
+        "text"
+      ],
+      [
+        "主軸方位",
+        "text"
+      ],
+      [
+        "標高",
+        "text"
+      ]
+    ]
+  },
+  "ピット": {
+    "prefix": "SH",
+    "title": "ピット（SH）",
+    "fields": [
+      [
+        "遺構種別",
+        "text"
+      ],
+      [
+        "遺構番号",
+        "text"
+      ],
+      [
+        "断面",
+        "bool"
+      ],
+      [
+        "3D",
+        "bool"
+      ],
+      [
+        "土注",
+        "bool"
+      ],
+      [
+        "完掘",
+        "bool"
+      ],
+      [
+        "SP観測",
+        "bool"
+      ],
+      [
+        "位置",
+        "text"
+      ],
+      [
+        "検出面",
+        "text"
+      ],
+      [
+        "着手",
+        "bool"
+      ],
+      [
+        "性格",
+        "text"
+      ],
+      [
+        "形状等",
+        "textarea"
+      ],
+      [
+        "出土遺物",
+        "textarea"
+      ],
+      [
+        "年代(構築・廃絶)",
+        "text"
+      ],
+      [
+        "土層",
+        "textarea"
+      ],
+      [
+        "重複",
+        "text"
+      ],
+      [
+        "備考",
+        "textarea"
+      ],
+      [
+        "規模",
+        "text"
+      ],
+      [
+        "主軸方位",
+        "text"
+      ],
+      [
+        "標高",
+        "text"
+      ]
+    ]
+  }
+};
+const STORAGE_KEY = "arch-ledger-manager-v1";
+
+let state = {
+  activeType: "住居",
+  data: loadData(),
+  selectedId: null,
+  dirty: false,
+  filter: ""
+};
+
+function nowText() {
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function loadData() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      for (const type of Object.keys(SCHEMA)) {
+        parsed[type] = Array.isArray(parsed[type]) ? parsed[type] : [];
+      }
+      return parsed;
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  const blank = {};
+  for (const type of Object.keys(SCHEMA)) blank[type] = [];
+  return blank;
+}
+
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+  document.getElementById("lastSaved").textContent = "最終保存: " + nowText();
+  setDirty(false);
+}
+
+function setDirty(flag) {
+  state.dirty = !!flag;
+  document.getElementById("saveState").textContent = state.dirty ? "未保存の変更があります" : "未保存の変更はありません";
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[m]);
+}
+
+function currentSchema() {
+  return SCHEMA[state.activeType];
+}
+
+function currentRows() {
+  return state.data[state.activeType] || [];
+}
+
+function nextRowId(type = state.activeType) {
+  const rows = state.data[type] || [];
+  const maxId = rows.reduce((m, r) => Math.max(m, Number(r._rowId || 0)), 0);
+  return maxId + 1;
+}
+
+function defaultRecord(type = state.activeType) {
+  const conf = SCHEMA[type];
+  const obj = {
+    _rowId: nextRowId(type),
+    _createdAt: nowText(),
+    _updatedAt: nowText()
+  };
+  for (const [name, kind] of conf.fields) {
+    obj[name] = kind === "bool" ? false : "";
+  }
+  return obj;
+}
+
+function visibleRows() {
+  const rows = [...currentRows()].sort((a,b) => (a._rowId||0) - (b._rowId||0));
+  const q = state.filter.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter(row => {
+    return Object.entries(row).some(([k,v]) => !String(k).startsWith("_") && String(v ?? "").toLowerCase().includes(q));
+  });
+}
+
+function renderTabs() {
+  const wrap = document.getElementById("tabs");
+  wrap.innerHTML = "";
+  for (const type of Object.keys(SCHEMA)) {
+    const btn = document.createElement("button");
+    btn.className = "tab" + (type === state.activeType ? " active" : "");
+    btn.textContent = `${SCHEMA[type].title}`;
+    btn.onclick = () => {
+      state.activeType = type;
+      state.selectedId = null;
+      renderAll();
+      loadForm(defaultRecord(type), false);
+    };
+    wrap.appendChild(btn);
+  }
+}
+
+function renderTable() {
+  const conf = currentSchema();
+  const head = document.getElementById("tableHead");
+  const body = document.getElementById("tableBody");
+  const fields = conf.fields;
+
+  const headerCells = ['<th class="compact">管理ID</th>']
+    .concat(fields.map(([name, kind]) => `<th class="${kind==='bool'?'compact':''}">${esc(name)}</th>`))
+    .join("");
+  head.innerHTML = `<tr>${headerCells}</tr>`;
+
+  const rows = visibleRows();
+  document.getElementById("recordCount").textContent = `${rows.length}件 / 全${currentRows().length}件`;
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="${fields.length+1}" class="muted" style="padding:18px;">データがありません。新規追加してください。</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(row => {
+    const tds = fields.map(([name, kind]) => {
+      const v = row[name];
+      if (kind === "bool") {
+        return `<td class="compact"><span class="badge ${v ? '' : 'off'}">${v ? '○' : '－'}</span></td>`;
+      }
+      const cls = ["形状等","出土遺物","土層","備考"].includes(name) ? "memo" : "";
+      return `<td class="${cls}">${esc(v ?? '')}</td>`;
+    }).join("");
+    return `<tr class="${state.selectedId===row._rowId ? 'selected':''}" data-id="${row._rowId}">
+      <td class="idcol">${row._rowId}</td>${tds}
+    </tr>`;
+  }).join("");
+
+  [...body.querySelectorAll("tr[data-id]")].forEach(tr => {
+    tr.onclick = () => {
+      const id = Number(tr.dataset.id);
+      state.selectedId = id;
+      const row = currentRows().find(r => r._rowId === id);
+      if (row) loadForm(structuredClone(row), false);
+      renderTable();
+      renderSelectedInfo();
+    };
+  });
+}
+
+function renderSelectedInfo() {
+  const el = document.getElementById("selectedInfo");
+  if (!state.selectedId) {
+    el.textContent = "未選択";
+    return;
+  }
+  const row = currentRows().find(r => r._rowId === state.selectedId);
+  if (!row) {
+    el.textContent = "未選択";
+    return;
+  }
+  const label = row["遺構番号"] || ("管理ID " + row._rowId);
+  el.textContent = `${state.activeType} / ${label}`;
+}
+
+function buildFormHtml(record) {
+  const conf = currentSchema();
+  const parts = [`<div class="grid">`];
+  for (const [name, kind] of conf.fields) {
+    const isFull = ["形状等","出土遺物","土層","備考"].includes(name);
+    const cls = "field" + (isFull ? " full" : "");
+    if (kind === "bool") {
+      parts.push(`
+        <div class="${cls}">
+          <label>${esc(name)}</label>
+          <label class="check"><input type="checkbox" data-field="${esc(name)}" ${record[name] ? "checked" : ""}> <span>実施済み / あり</span></label>
+        </div>
+      `);
+    } else if (kind === "textarea") {
+      parts.push(`
+        <div class="${cls}">
+          <label>${esc(name)}</label>
+          <textarea data-field="${esc(name)}" placeholder="${esc(name)}を入力">${esc(record[name] ?? "")}</textarea>
+        </div>
+      `);
+    } else {
+      parts.push(`
+        <div class="${cls}">
+          <label>${esc(name)}</label>
+          <input type="text" data-field="${esc(name)}" value="${esc(record[name] ?? "")}" placeholder="${esc(name)}を入力">
+        </div>
+      `);
+    }
+  }
+  parts.push(`</div>`);
+  return parts.join("");
+}
+
+function loadForm(record, markDirty=true) {
+  document.getElementById("formArea").innerHTML = buildFormHtml(record);
+  document.getElementById("formTitle").textContent = state.selectedId ? "編集" : "新規入力";
+  document.getElementById("formArea").dataset.rowId = record._rowId || "";
+  document.getElementById("formArea").dataset.createdAt = record._createdAt || nowText();
+  hookDirty();
+  if (markDirty) setDirty(true);
+  renderSelectedInfo();
+}
+
+function hookDirty() {
+  document.querySelectorAll('#formArea input, #formArea textarea').forEach(el => {
+    el.addEventListener('input', () => setDirty(true));
+    el.addEventListener('change', () => setDirty(true));
+  });
+}
+
+function collectForm() {
+  const conf = currentSchema();
+  const obj = {
+    _rowId: Number(document.getElementById("formArea").dataset.rowId || nextRowId()),
+    _createdAt: document.getElementById("formArea").dataset.createdAt || nowText(),
+    _updatedAt: nowText()
+  };
+  for (const [name, kind] of conf.fields) {
+    const el = document.querySelector(`[data-field="${CSS.escape(name)}"]`);
+    if (!el) continue;
+    obj[name] = kind === "bool" ? !!el.checked : el.value.trim();
+  }
+  return obj;
+}
+
+function saveCurrent(replaceSelected=true) {
+  const rows = currentRows();
+  const obj = collectForm();
+  const idx = rows.findIndex(r => r._rowId === obj._rowId);
+  if (replaceSelected && idx >= 0) {
+    rows[idx] = obj;
+    state.selectedId = obj._rowId;
+  } else {
+    obj._rowId = nextRowId();
+    rows.push(obj);
+    state.selectedId = obj._rowId;
+  }
+  persist();
+  renderAll();
+  loadForm(structuredClone(obj), false);
+}
+
+function deleteSelected() {
+  if (!state.selectedId) return;
+  const rows = currentRows();
+  const idx = rows.findIndex(r => r._rowId === state.selectedId);
+  if (idx < 0) return;
+  const row = rows[idx];
+  const label = row["遺構番号"] || `管理ID ${row._rowId}`;
+  if (!confirm(`削除しますか？\n${state.activeType} / ${label}`)) return;
+  rows.splice(idx, 1);
+  state.selectedId = null;
+  persist();
+  renderAll();
+  loadForm(defaultRecord(), false);
+}
+
+function duplicateSelected() {
+  const row = state.selectedId
+    ? currentRows().find(r => r._rowId === state.selectedId)
+    : collectForm();
+  if (!row) return;
+  const copy = structuredClone(row);
+  copy._rowId = nextRowId();
+  copy._createdAt = nowText();
+  copy._updatedAt = nowText();
+  currentRows().push(copy);
+  state.selectedId = copy._rowId;
+  persist();
+  renderAll();
+  loadForm(structuredClone(copy), false);
+}
+
+function exportJson() {
+  const blob = new Blob([JSON.stringify(state.data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `遺構台帳_${nowText().replace(/[: ]/g,'-')}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importJson(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      for (const type of Object.keys(SCHEMA)) {
+        parsed[type] = Array.isArray(parsed[type]) ? parsed[type] : [];
+      }
+      state.data = parsed;
+      state.selectedId = null;
+      persist();
+      renderAll();
+      loadForm(defaultRecord(), false);
+      alert("JSONを読み込みました。");
+    } catch (e) {
+      alert("JSONの読み込みに失敗しました。");
+      console.error(e);
+    }
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function exportCsv() {
+  const conf = currentSchema();
+  const rows = currentRows().slice().sort((a,b) => (a._rowId||0)-(b._rowId||0));
+  const headers = ["管理ID", ...conf.fields.map(f => f[0]), "作成日時", "更新日時"];
+  const lines = [headers.map(csvEscape).join(",")];
+  for (const row of rows) {
+    const vals = [
+      row._rowId,
+      ...conf.fields.map(([name, kind]) => kind === "bool" ? (row[name] ? "1" : "0") : (row[name] ?? "")),
+      row._createdAt ?? "",
+      row._updatedAt ?? ""
+    ];
+    lines.push(vals.map(csvEscape).join(","));
+  }
+  const blob = new Blob(["\ufeff" + lines.join("\n")], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${state.activeType}_台帳_${nowText().replace(/[: ]/g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function renderAll() {
+  renderTabs();
+  renderTable();
+  renderSelectedInfo();
+}
+
+document.getElementById("addBtn").onclick = () => {
+  state.selectedId = null;
+  loadForm(defaultRecord(), false);
+  renderTable();
+};
+document.getElementById("saveBtn").onclick = () => saveCurrent(true);
+document.getElementById("newFromFormBtn").onclick = () => saveCurrent(false);
+document.getElementById("delBtn").onclick = deleteSelected;
+document.getElementById("dupBtn").onclick = duplicateSelected;
+document.getElementById("resetBtn").onclick = () => {
+  if (state.selectedId) {
+    const row = currentRows().find(r => r._rowId === state.selectedId);
+    loadForm(structuredClone(row || defaultRecord()), false);
+  } else {
+    loadForm(defaultRecord(), false);
+  }
+  setDirty(false);
+};
+document.getElementById("exportJsonBtn").onclick = exportJson;
+document.getElementById("importJsonBtn").onclick = () => document.getElementById("jsonFileInput").click();
+document.getElementById("jsonFileInput").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) importJson(file);
+  e.target.value = "";
+});
+document.getElementById("exportCsvBtn").onclick = exportCsv;
+document.getElementById("clearSearchBtn").onclick = () => {
+  state.filter = "";
+  document.getElementById("searchInput").value = "";
+  renderTable();
+};
+document.getElementById("searchInput").addEventListener("input", e => {
+  state.filter = e.target.value || "";
+  renderTable();
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (!state.dirty) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+renderAll();
+loadForm(defaultRecord(), false);
+document.getElementById("lastSaved").textContent = localStorage.getItem(STORAGE_KEY) ? "保存済みデータあり" : "";
+</script>
+</body>
+</html>
